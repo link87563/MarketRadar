@@ -52,5 +52,6 @@ class Program
         Log.Information(msg);
 
         await discord.SendAsync(msg);
+
     }
 }
