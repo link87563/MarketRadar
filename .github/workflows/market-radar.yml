@@ -1,0 +1,31 @@
+name: Market Radar
+
+on:
+  schedule:
+    - cron: "0 0 * * 1-5"
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore
+
+      - name: Run Market Radar
+        run: dotnet run --no-build
+        env:
+          FredApiKey: ${{ secrets.FRED_API_KEY }}
+          DiscordSetting__WebhookUrl: ${{ secrets.DISCORD_WEBHOOK_URL }}
