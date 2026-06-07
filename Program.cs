@@ -27,8 +27,7 @@ class Program
                 services.Configure<Setting>(context.Configuration);
 
                 services.AddHttpClient<FredService>();
-                services.AddHttpClient<NasdaqService>();
-                services.AddHttpClient<DxyService>();
+                services.AddHttpClient<YahooTrendService>();
                 services.AddSingleton<RiskEngineService>();
                 services.AddSingleton<MarketService>();
                 services.AddSingleton<OutputFormatter>();

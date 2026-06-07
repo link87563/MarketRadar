@@ -9,8 +9,6 @@ namespace MarketRadar
     public class Setting
     {
         public string FredApiKey { get; set; }
-        public string NasdaqUrl { get; set; }
-        public string DxyUrl { get; set; }
         public DiscordSetting DiscordSetting { get; set; }
     }
 

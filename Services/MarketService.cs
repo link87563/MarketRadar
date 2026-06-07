@@ -1,32 +1,33 @@
 ﻿using MarketRadar.Models;
-using Microsoft.Extensions.Options;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
 namespace MarketRadar.Services
 {
     public class MarketService
     {
         private FredService _fredService;
-        private NasdaqService _nasdaqService;
-        private DxyService _dxyService;
+        private YahooTrendService _yahooTrendService;
 
-        public MarketService(IOptions<Setting> setting, FredService fredService, NasdaqService nasdaqService, 
-            DxyService dxyService)
+        public MarketService(FredService fredService, YahooTrendService yahooTrendService)
         {
             _fredService = fredService;
-            _nasdaqService = nasdaqService;
-            _dxyService = dxyService;
+            _yahooTrendService = yahooTrendService;
         }
 
         public async Task<MarketData> GetRiskAsync()
         {
-            var nasdaq = await _nasdaqService.GetNasdaqDataAsync();
-            var dxy = await _dxyService.GetDxyDataAsync();
-            var spread = await _fredService.GetYieldDataAsync();
+            var nasdaqTask = _yahooTrendService.GetTrendAsync("^IXIC");
+            var dxyTask = _yahooTrendService.GetTrendAsync("DX-Y.NYB");
+            var spreadTask = _fredService.GetYieldDataAsync();
+            var vixTask = _yahooTrendService.GetTrendAsync("^VIX");
+            var soxTask = _yahooTrendService.GetTrendAsync("^SOX");
+            var tsmTask = _yahooTrendService.GetTrendAsync("TSM");
+            var goldTask = _yahooTrendService.GetTrendAsync("GC=F");
+            var btcTask = _yahooTrendService.GetTrendAsync("BTC-USD");
+            var usdTwdTask = _yahooTrendService.GetTrendAsync("TWD=X");
+
+            await Task.WhenAll(nasdaqTask, dxyTask, spreadTask, vixTask, soxTask, tsmTask, goldTask, btcTask, usdTwdTask);
+
+            var nasdaq = await nasdaqTask;
+            var dxy = await dxyTask;
 
             return new MarketData
             {
@@ -34,7 +35,13 @@ namespace MarketRadar.Services
                 DollarChange = dxy.OneDayChange,
                 NasdaqTrend = nasdaq,
                 DollarTrend = dxy,
-                YieldSpread = spread
+                YieldSpread = await spreadTask,
+                VixTrend = await vixTask,
+                SoxTrend = await soxTask,
+                TsmTrend = await tsmTask,
+                GoldTrend = await goldTask,
+                BtcTrend = await btcTask,
+                UsdTwdTrend = await usdTwdTask
             };
         }
     }

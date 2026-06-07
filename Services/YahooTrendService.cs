@@ -1,23 +1,21 @@
 using MarketRadar.Models;
-using Microsoft.Extensions.Options;
 using System.Text.Json;
 
 namespace MarketRadar.Services
 {
-    public class DxyService
+    public class YahooTrendService
     {
         private readonly HttpClient _http;
-        private readonly string _dxyUrl = string.Empty;
 
-        public DxyService(HttpClient http, IOptions<Setting> setting)
+        public YahooTrendService(HttpClient http)
         {
             _http = http;
-            _dxyUrl = setting.Value.DxyUrl;
         }
 
-        public async Task<PriceTrend> GetDxyDataAsync()
+        public async Task<PriceTrend> GetTrendAsync(string symbol)
         {
-            var request = new HttpRequestMessage(HttpMethod.Get, _dxyUrl);
+            var url = $"https://query1.finance.yahoo.com/v8/finance/chart/{Uri.EscapeDataString(symbol)}?interval=1d&range=5d";
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.Add(
                 "User-Agent",
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120 Safari/537.36"
@@ -43,9 +41,9 @@ namespace MarketRadar.Services
             foreach (var item in closes.EnumerateArray())
             {
                 if (item.ValueKind == JsonValueKind.Number &&
-                    item.TryGetDecimal(out var v))
+                    item.TryGetDecimal(out var value))
                 {
-                    list.Add(v);
+                    list.Add(value);
                 }
             }
 

@@ -42,6 +42,16 @@ DXY 5D：{r.DollarTrend.FiveDayChange:F2}%
 DXY Momentum：{r.DollarTrend.Momentum:F2}%
 
 ━━━━━━━━━━
+🌐 Cross Asset
+說明：VIX 看恐慌情緒，SOX/TSM 看半導體與台股科技鏈，Gold/BTC 看避險與風險偏好，USD/TWD 看台幣資金壓力。
+VIX 5D：{r.VixTrend.FiveDayChange:F2}%
+SOX 5D：{r.SoxTrend.FiveDayChange:F2}%
+TSM ADR 5D：{r.TsmTrend.FiveDayChange:F2}%
+Gold 5D：{r.GoldTrend.FiveDayChange:F2}%
+BTC 5D：{r.BtcTrend.FiveDayChange:F2}%
+USD/TWD 5D：{r.UsdTwdTrend.FiveDayChange:F2}%
+
+━━━━━━━━━━
 📌 Interpretation
 {GetComment(r)}
 
@@ -58,7 +68,11 @@ DXY Momentum：{r.DollarTrend.Momentum:F2}%
                 GetRiskAccelerationComment(r),
                 GetNasdaqTrendComment(r),
                 GetDxyTrendComment(r),
-                GetYieldSpreadComment(r)
+                GetYieldSpreadComment(r),
+                GetVixComment(r),
+                GetTaiwanTechComment(r),
+                GetGoldBtcComment(r),
+                GetUsdTwdComment(r)
             };
 
             return string.Join(Environment.NewLine, lines);
@@ -186,6 +200,62 @@ DXY Momentum：{r.DollarTrend.Momentum:F2}%
                 return $"10Y-2Y 只有 {r.Spread:F2}，殖利率曲線偏平，景氣訊號仍需保守看待。";
 
             return $"10Y-2Y 還是正的 {r.Spread:F2}，代表殖利率曲線本身不是最壞狀態，但不足以抵銷股市與美元的 risk-off（避險模式，資金降低風險資產曝險）訊號。";
+        }
+
+        private string GetVixComment(RiskReport r)
+        {
+            if (r.VixTrend.FiveDayChange >= 15)
+                return $"VIX（恐慌指數）5 日大幅上升 {r.VixTrend.FiveDayChange:F2}%，代表市場避險需求明顯升溫。";
+
+            if (r.VixTrend.FiveDayChange >= 8)
+                return $"VIX（恐慌指數）5 日上升 {r.VixTrend.FiveDayChange:F2}%，市場波動壓力正在增加。";
+
+            if (r.VixTrend.FiveDayChange <= -10)
+                return $"VIX（恐慌指數）5 日下降 {Math.Abs(r.VixTrend.FiveDayChange):F2}%，代表恐慌情緒正在降溫。";
+
+            return "VIX（恐慌指數）短線變化不大，波動壓力沒有明顯擴大。";
+        }
+
+        private string GetTaiwanTechComment(RiskReport r)
+        {
+            if (r.SoxTrend.FiveDayChange <= -4 && r.TsmTrend.FiveDayChange <= -4)
+                return $"SOX（費半）與 TSM ADR 同步轉弱，台股半導體與電子權值股隔日壓力偏高。";
+
+            if (r.SoxTrend.FiveDayChange <= -4)
+                return $"SOX（費半）5 日下跌 {r.SoxTrend.FiveDayChange:F2}%，半導體族群外部壓力升高。";
+
+            if (r.TsmTrend.FiveDayChange <= -4)
+                return $"TSM ADR 5 日下跌 {r.TsmTrend.FiveDayChange:F2}%，台股權值股需留意補跌壓力。";
+
+            if (r.SoxTrend.FiveDayChange >= 4 && r.TsmTrend.FiveDayChange >= 4)
+                return "SOX（費半）與 TSM ADR 同步偏強，台股科技鏈外部環境較友善。";
+
+            return "SOX（費半）與 TSM ADR 未出現同步極端訊號，台股科技鏈壓力暫不算全面。";
+        }
+
+        private string GetGoldBtcComment(RiskReport r)
+        {
+            if (r.GoldTrend.FiveDayChange > 1 && r.BtcTrend.FiveDayChange < -3)
+                return $"Gold 上漲、BTC 下跌，資金偏向防禦，風險偏好正在降溫。";
+
+            if (r.GoldTrend.FiveDayChange < -1 && r.BtcTrend.FiveDayChange < -3)
+                return "Gold 與 BTC 同步轉弱，可能反映美元壓制或流動性收縮壓力。";
+
+            if (r.BtcTrend.FiveDayChange > 5)
+                return $"BTC 5 日上漲 {r.BtcTrend.FiveDayChange:F2}%，高風險資產情緒仍有支撐。";
+
+            return "Gold/BTC 沒有給出強烈單邊訊號，跨資產情緒以股市與美元訊號為主。";
+        }
+
+        private string GetUsdTwdComment(RiskReport r)
+        {
+            if (r.UsdTwdTrend.FiveDayChange >= 0.8m)
+                return $"USD/TWD 5 日上升 {r.UsdTwdTrend.FiveDayChange:F2}%，代表台幣偏貶，台股外資資金壓力需留意。";
+
+            if (r.UsdTwdTrend.FiveDayChange <= -0.8m)
+                return $"USD/TWD 5 日下降 {Math.Abs(r.UsdTwdTrend.FiveDayChange):F2}%，代表台幣偏升，外資匯率壓力相對降溫。";
+
+            return "USD/TWD 短線變化不大，台幣匯率暫未形成明顯額外壓力。";
         }
 
         private string GetComment(RiskReport r)

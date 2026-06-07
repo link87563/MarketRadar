@@ -20,14 +20,20 @@ namespace MarketRadar.Services
                 dxy,
                 spread,
                 data.NasdaqTrend,
-                data.DollarTrend);
+                data.DollarTrend,
+                data.VixTrend,
+                data.SoxTrend,
+                data.TsmTrend);
 
             var previousScore = CalculateScore(
                 data.NasdaqTrend.PreviousOneDayChange,
                 data.DollarTrend.PreviousOneDayChange,
                 spread,
                 ToPreviousTrend(data.NasdaqTrend),
-                ToPreviousTrend(data.DollarTrend));
+                ToPreviousTrend(data.DollarTrend),
+                ToPreviousTrend(data.VixTrend),
+                ToPreviousTrend(data.SoxTrend),
+                ToPreviousTrend(data.TsmTrend));
 
             return new RiskReport
             {
@@ -43,17 +49,32 @@ namespace MarketRadar.Services
                 Dxy = dxy,
                 Spread = spread,
                 NasdaqTrend = data.NasdaqTrend,
-                DollarTrend = data.DollarTrend
+                DollarTrend = data.DollarTrend,
+                VixTrend = data.VixTrend,
+                SoxTrend = data.SoxTrend,
+                TsmTrend = data.TsmTrend,
+                GoldTrend = data.GoldTrend,
+                BtcTrend = data.BtcTrend,
+                UsdTwdTrend = data.UsdTwdTrend
             };
         }
 
-        private int CalculateScore(decimal nasdaq, decimal dxy, decimal spread, PriceTrend nasdaqTrend, PriceTrend dxyTrend)
+        private int CalculateScore(
+            decimal nasdaq,
+            decimal dxy,
+            decimal spread,
+            PriceTrend nasdaqTrend,
+            PriceTrend dxyTrend,
+            PriceTrend vixTrend,
+            PriceTrend soxTrend,
+            PriceTrend tsmTrend)
         {
             return
                 GetNasdaqScore(nasdaq) * 2 +
                 GetDxyScore(dxy) +
                 GetSpreadScore(spread) +
-                GetMomentumScore(nasdaqTrend, dxyTrend);
+                GetMomentumScore(nasdaqTrend, dxyTrend) +
+                GetCrossAssetScore(vixTrend, soxTrend, tsmTrend);
         }
 
         private PriceTrend ToPreviousTrend(PriceTrend trend)
@@ -128,6 +149,23 @@ namespace MarketRadar.Services
 
             if (nasdaq.Momentum < -1 && dxy.Momentum > 0.3m) score -= 2;
             if (nasdaq.Momentum > 1 && dxy.Momentum < -0.3m) score += 1;
+
+            return score;
+        }
+
+        private int GetCrossAssetScore(PriceTrend vix, PriceTrend sox, PriceTrend tsm)
+        {
+            var score = 0;
+
+            if (vix.FiveDayChange >= 15) score -= 3;
+            else if (vix.FiveDayChange >= 8) score -= 2;
+            else if (vix.FiveDayChange <= -10) score += 2;
+
+            if (sox.FiveDayChange <= -4) score -= 2;
+            else if (sox.FiveDayChange >= 4) score += 1;
+
+            if (tsm.FiveDayChange <= -4) score -= 2;
+            else if (tsm.FiveDayChange >= 4) score += 1;
 
             return score;
         }
