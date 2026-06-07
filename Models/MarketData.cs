@@ -21,5 +21,8 @@ namespace MarketRadar.Models
         public PriceTrend GoldTrend { get; set; } = new();
         public PriceTrend BtcTrend { get; set; } = new();
         public PriceTrend UsdTwdTrend { get; set; } = new();
+        public PriceTrend TltTrend { get; set; } = new();
+        public PriceTrend HygTrend { get; set; } = new();
+        public PriceTrend OilTrend { get; set; } = new();
     }
 }

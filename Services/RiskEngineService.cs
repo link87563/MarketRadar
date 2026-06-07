@@ -15,7 +15,7 @@ namespace MarketRadar.Services
             var dxy = data.DollarChange;
             var spread = data.YieldSpread;
 
-            var score = CalculateScore(
+            var scoreBreakdown = CalculateScoreBreakdown(
                 nasdaq,
                 dxy,
                 spread,
@@ -23,9 +23,12 @@ namespace MarketRadar.Services
                 data.DollarTrend,
                 data.VixTrend,
                 data.SoxTrend,
-                data.TsmTrend);
+                data.TsmTrend,
+                data.TltTrend,
+                data.HygTrend);
+            var score = scoreBreakdown.Sum(x => x.Score);
 
-            var previousScore = CalculateScore(
+            var previousScoreBreakdown = CalculateScoreBreakdown(
                 data.NasdaqTrend.PreviousOneDayChange,
                 data.DollarTrend.PreviousOneDayChange,
                 spread,
@@ -33,7 +36,10 @@ namespace MarketRadar.Services
                 ToPreviousTrend(data.DollarTrend),
                 ToPreviousTrend(data.VixTrend),
                 ToPreviousTrend(data.SoxTrend),
-                ToPreviousTrend(data.TsmTrend));
+                ToPreviousTrend(data.TsmTrend),
+                ToPreviousTrend(data.TltTrend),
+                ToPreviousTrend(data.HygTrend));
+            var previousScore = previousScoreBreakdown.Sum(x => x.Score);
 
             return new RiskReport
             {
@@ -55,11 +61,16 @@ namespace MarketRadar.Services
                 TsmTrend = data.TsmTrend,
                 GoldTrend = data.GoldTrend,
                 BtcTrend = data.BtcTrend,
-                UsdTwdTrend = data.UsdTwdTrend
+                UsdTwdTrend = data.UsdTwdTrend,
+                TltTrend = data.TltTrend,
+                HygTrend = data.HygTrend,
+                OilTrend = data.OilTrend,
+                ScoreBreakdown = scoreBreakdown,
+                DataWarnings = GetDataWarnings(data)
             };
         }
 
-        private int CalculateScore(
+        private List<ScoreContribution> CalculateScoreBreakdown(
             decimal nasdaq,
             decimal dxy,
             decimal spread,
@@ -67,14 +78,56 @@ namespace MarketRadar.Services
             PriceTrend dxyTrend,
             PriceTrend vixTrend,
             PriceTrend soxTrend,
-            PriceTrend tsmTrend)
+            PriceTrend tsmTrend,
+            PriceTrend tltTrend,
+            PriceTrend hygTrend)
         {
-            return
-                GetNasdaqScore(nasdaq) * 2 +
-                GetDxyScore(dxy) +
-                GetSpreadScore(spread) +
-                GetMomentumScore(nasdaqTrend, dxyTrend) +
-                GetCrossAssetScore(vixTrend, soxTrend, tsmTrend);
+            var nasdaqScore = GetNasdaqScore(nasdaq) * 2;
+            var dxyScore = GetDxyScore(dxy);
+            var spreadScore = GetSpreadScore(spread);
+            var momentumScore = GetMomentumScore(nasdaqTrend, dxyTrend);
+            var crossAssetScore = GetCrossAssetScore(vixTrend, soxTrend, tsmTrend);
+            var ratesCreditScore = GetRatesCreditScore(tltTrend, hygTrend);
+
+            return new List<ScoreContribution>
+            {
+                new()
+                {
+                    Name = "Nasdaq",
+                    Score = nasdaqScore,
+                    Reason = $"1D {nasdaq:F2}%"
+                },
+                new()
+                {
+                    Name = "DXY",
+                    Score = dxyScore,
+                    Reason = $"1D {dxy:F2}%"
+                },
+                new()
+                {
+                    Name = "10Y-2Y",
+                    Score = spreadScore,
+                    Reason = $"Spread {spread:F2}"
+                },
+                new()
+                {
+                    Name = "Momentum",
+                    Score = momentumScore,
+                    Reason = $"Nasdaq 5D {nasdaqTrend.FiveDayChange:F2}%, DXY 5D {dxyTrend.FiveDayChange:F2}%"
+                },
+                new()
+                {
+                    Name = "Cross Asset",
+                    Score = crossAssetScore,
+                    Reason = $"VIX 5D {FormatTrend(vixTrend)}, SOX 5D {FormatTrend(soxTrend)}, TSM 5D {FormatTrend(tsmTrend)}"
+                },
+                new()
+                {
+                    Name = "Rates/Credit",
+                    Score = ratesCreditScore,
+                    Reason = $"TLT 5D {FormatTrend(tltTrend)}, HYG 5D {FormatTrend(hygTrend)}"
+                }
+            };
         }
 
         private PriceTrend ToPreviousTrend(PriceTrend trend)
@@ -153,21 +206,80 @@ namespace MarketRadar.Services
             return score;
         }
 
+        private int GetRatesCreditScore(PriceTrend tlt, PriceTrend hyg)
+        {
+            var score = 0;
+
+            if (hyg.IsValid)
+            {
+                if (hyg.FiveDayChange <= -2) score -= 3;
+                else if (hyg.FiveDayChange <= -1) score -= 1;
+                else if (hyg.FiveDayChange >= 1.5m) score += 1;
+            }
+
+            if (tlt.IsValid)
+            {
+                if (tlt.FiveDayChange <= -3) score -= 2;
+                else if (tlt.FiveDayChange >= 3) score += 1;
+            }
+
+            return score;
+        }
+
         private int GetCrossAssetScore(PriceTrend vix, PriceTrend sox, PriceTrend tsm)
         {
             var score = 0;
 
-            if (vix.FiveDayChange >= 15) score -= 3;
-            else if (vix.FiveDayChange >= 8) score -= 2;
-            else if (vix.FiveDayChange <= -10) score += 2;
+            if (vix.IsValid)
+            {
+                if (vix.FiveDayChange >= 15) score -= 3;
+                else if (vix.FiveDayChange >= 8) score -= 2;
+                else if (vix.FiveDayChange <= -10) score += 2;
+            }
 
-            if (sox.FiveDayChange <= -4) score -= 2;
-            else if (sox.FiveDayChange >= 4) score += 1;
+            if (sox.IsValid)
+            {
+                if (sox.FiveDayChange <= -4) score -= 2;
+                else if (sox.FiveDayChange >= 4) score += 1;
+            }
 
-            if (tsm.FiveDayChange <= -4) score -= 2;
-            else if (tsm.FiveDayChange >= 4) score += 1;
+            if (tsm.IsValid)
+            {
+                if (tsm.FiveDayChange <= -4) score -= 2;
+                else if (tsm.FiveDayChange >= 4) score += 1;
+            }
 
             return score;
+        }
+
+        private List<string> GetDataWarnings(MarketData data)
+        {
+            var warnings = new List<string>();
+
+            AddWarning(warnings, "Nasdaq", data.NasdaqTrend);
+            AddWarning(warnings, "DXY", data.DollarTrend);
+            AddWarning(warnings, "VIX", data.VixTrend);
+            AddWarning(warnings, "SOX", data.SoxTrend);
+            AddWarning(warnings, "TSM ADR", data.TsmTrend);
+            AddWarning(warnings, "Gold", data.GoldTrend);
+            AddWarning(warnings, "BTC", data.BtcTrend);
+            AddWarning(warnings, "USD/TWD", data.UsdTwdTrend);
+            AddWarning(warnings, "TLT", data.TltTrend);
+            AddWarning(warnings, "HYG", data.HygTrend);
+            AddWarning(warnings, "Oil", data.OilTrend);
+
+            return warnings;
+        }
+
+        private void AddWarning(List<string> warnings, string name, PriceTrend trend)
+        {
+            if (!trend.IsValid)
+                warnings.Add($"{name}: {trend.Warning}");
+        }
+
+        private string FormatTrend(PriceTrend trend)
+        {
+            return trend.IsValid ? $"{trend.FiveDayChange:F2}%" : "N/A";
         }
 
         private string GetRiskLabel(int score)

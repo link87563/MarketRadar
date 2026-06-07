@@ -25,6 +25,14 @@ Previous：{r.PreviousScore}
 Change：{FormatSigned(r.ScoreChange)}（{r.ChangeLabel}）
 
 ━━━━━━━━━━
+🧾 Score Breakdown
+{GetScoreBreakdown(r)}
+
+━━━━━━━━━━
+🧪 Data Quality
+{GetDataQuality(r)}
+
+━━━━━━━━━━
 📡 Market Data
 Nasdaq：{r.Nasdaq:F2}%
 DXY：{r.Dxy:F2}%
@@ -33,7 +41,7 @@ DXY 說明：美元指數，衡量美元相對一籃子主要貨幣的強弱
 
 ━━━━━━━━━━
 📈 5D Trend
-說明：3D/5D 是近 3/5 個交易日累計變化，Momentum 是最近 3 日均值相對前段均值的變化，用來看短線是否加速。
+說明：3D/5D 是近 3/5 個交易日累計變化，正值代表上漲、負值代表下跌；Momentum 正值代表短線轉強，負值代表短線轉弱。
 Nasdaq 3D：{r.NasdaqTrend.ThreeDayChange:F2}%
 Nasdaq 5D：{r.NasdaqTrend.FiveDayChange:F2}%
 Nasdaq Momentum：{r.NasdaqTrend.Momentum:F2}%
@@ -43,13 +51,21 @@ DXY Momentum：{r.DollarTrend.Momentum:F2}%
 
 ━━━━━━━━━━
 🌐 Cross Asset
-說明：VIX 看恐慌情緒，SOX/TSM 看半導體與台股科技鏈，Gold/BTC 看避險與風險偏好，USD/TWD 看台幣資金壓力。
+說明：VIX 越高通常越偏避險；SOX/TSM 正值偏多、負值偏空；Gold 上漲偏防禦，BTC 上漲偏風險偏好；USD/TWD 上升代表台幣偏貶，下降代表台幣偏升。
 VIX 5D：{r.VixTrend.FiveDayChange:F2}%
 SOX 5D：{r.SoxTrend.FiveDayChange:F2}%
 TSM ADR 5D：{r.TsmTrend.FiveDayChange:F2}%
 Gold 5D：{r.GoldTrend.FiveDayChange:F2}%
 BTC 5D：{r.BtcTrend.FiveDayChange:F2}%
 USD/TWD 5D：{r.UsdTwdTrend.FiveDayChange:F2}%
+
+━━━━━━━━━━
+🧭 Rates / Credit / Commodity
+TLT（長天期美債），HYG（高收益債）
+說明：TLT 上漲多代表長債殖利率下降或避險買債，TLT 下跌代表利率壓力；HYG 上漲代表信用市場穩定，HYG 下跌代表信用風險升溫；Oil 上漲可能是需求強或通膨/地緣風險，Oil 下跌可能是需求轉弱。
+TLT 5D：{r.TltTrend.FiveDayChange:F2}%
+HYG 5D：{r.HygTrend.FiveDayChange:F2}%
+Oil 5D：{r.OilTrend.FiveDayChange:F2}%
 
 ━━━━━━━━━━
 📌 Interpretation
@@ -72,10 +88,32 @@ USD/TWD 5D：{r.UsdTwdTrend.FiveDayChange:F2}%
                 GetVixComment(r),
                 GetTaiwanTechComment(r),
                 GetGoldBtcComment(r),
-                GetUsdTwdComment(r)
+                GetUsdTwdComment(r),
+                GetRatesCreditComment(r),
+                GetOilComment(r)
             };
 
             return string.Join(Environment.NewLine, lines);
+        }
+
+        private string GetScoreBreakdown(RiskReport r)
+        {
+            if (r.ScoreBreakdown.Count == 0)
+                return "No score breakdown available.";
+
+            return string.Join(
+                Environment.NewLine,
+                r.ScoreBreakdown.Select(x => $"{x.Name}：{FormatSigned(x.Score)}（{x.Reason}）"));
+        }
+
+        private string GetDataQuality(RiskReport r)
+        {
+            if (r.DataWarnings.Count == 0)
+                return "資料檢查正常。";
+
+            return string.Join(
+                Environment.NewLine,
+                r.DataWarnings.Select(x => $"資料警告：{x}"));
         }
 
         private string GetRegimeText(string regime)
@@ -256,6 +294,40 @@ USD/TWD 5D：{r.UsdTwdTrend.FiveDayChange:F2}%
                 return $"USD/TWD 5 日下降 {Math.Abs(r.UsdTwdTrend.FiveDayChange):F2}%，代表台幣偏升，外資匯率壓力相對降溫。";
 
             return "USD/TWD 短線變化不大，台幣匯率暫未形成明顯額外壓力。";
+        }
+
+        private string GetRatesCreditComment(RiskReport r)
+        {
+            if (r.HygTrend.FiveDayChange <= -2)
+                return $"HYG（高收益債）5 日下跌 {r.HygTrend.FiveDayChange:F2}%，信用市場轉弱，risk-off 訊號更完整。";
+
+            if (r.HygTrend.FiveDayChange <= -1)
+                return $"HYG（高收益債）5 日偏弱 {r.HygTrend.FiveDayChange:F2}%，信用風險開始升溫。";
+
+            if (r.TltTrend.FiveDayChange <= -3)
+                return $"TLT（長天期美債）5 日下跌 {r.TltTrend.FiveDayChange:F2}%，代表長端利率壓力升高，科技股估值可能承壓。";
+
+            if (r.TltTrend.FiveDayChange >= 3)
+                return $"TLT（長天期美債）5 日上漲 {r.TltTrend.FiveDayChange:F2}%，可能代表避險買債或降息預期升溫。";
+
+            if (r.HygTrend.FiveDayChange >= 1.5m)
+                return $"HYG（高收益債）5 日上漲 {r.HygTrend.FiveDayChange:F2}%，信用市場相對穩定，對 risk-on 有支撐。";
+
+            return "TLT/HYG 沒有明顯極端訊號，利率與信用市場暫未額外放大風險。";
+        }
+
+        private string GetOilComment(RiskReport r)
+        {
+            if (r.OilTrend.FiveDayChange >= 5 && r.VixTrend.FiveDayChange >= 8)
+                return $"Oil 5 日上漲 {r.OilTrend.FiveDayChange:F2}% 且 VIX 升溫，可能反映通膨、地緣風險或供給壓力。";
+
+            if (r.OilTrend.FiveDayChange <= -5 && r.NasdaqTrend.FiveDayChange <= -3)
+                return $"Oil 與 Nasdaq 同步轉弱，可能反映景氣需求降溫與 risk-off 壓力。";
+
+            if (r.OilTrend.FiveDayChange >= 3 && r.NasdaqTrend.FiveDayChange >= 3)
+                return "Oil 與股市同步偏強，市場可能在交易景氣預期改善。";
+
+            return "Oil 短線沒有給出強烈方向，暫時作為通膨與景氣需求的輔助觀察。";
         }
 
         private string GetComment(RiskReport r)

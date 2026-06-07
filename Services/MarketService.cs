@@ -23,8 +23,11 @@ namespace MarketRadar.Services
             var goldTask = _yahooTrendService.GetTrendAsync("GC=F");
             var btcTask = _yahooTrendService.GetTrendAsync("BTC-USD");
             var usdTwdTask = _yahooTrendService.GetTrendAsync("TWD=X");
+            var tltTask = _yahooTrendService.GetTrendAsync("TLT");
+            var hygTask = _yahooTrendService.GetTrendAsync("HYG");
+            var oilTask = _yahooTrendService.GetTrendAsync("CL=F");
 
-            await Task.WhenAll(nasdaqTask, dxyTask, spreadTask, vixTask, soxTask, tsmTask, goldTask, btcTask, usdTwdTask);
+            await Task.WhenAll(nasdaqTask, dxyTask, spreadTask, vixTask, soxTask, tsmTask, goldTask, btcTask, usdTwdTask, tltTask, hygTask, oilTask);
 
             var nasdaq = await nasdaqTask;
             var dxy = await dxyTask;
@@ -41,7 +44,10 @@ namespace MarketRadar.Services
                 TsmTrend = await tsmTask,
                 GoldTrend = await goldTask,
                 BtcTrend = await btcTask,
-                UsdTwdTrend = await usdTwdTask
+                UsdTwdTrend = await usdTwdTask,
+                TltTrend = await tltTask,
+                HygTrend = await hygTask,
+                OilTrend = await oilTask
             };
         }
     }

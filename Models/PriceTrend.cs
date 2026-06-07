@@ -11,5 +11,7 @@ namespace MarketRadar.Models
         public decimal PreviousFiveDayChange { get; set; }
         public decimal PreviousMomentum { get; set; }
         public int DataPoints { get; set; }
+        public bool IsValid { get; set; }
+        public string Warning { get; set; } = string.Empty;
     }
 }

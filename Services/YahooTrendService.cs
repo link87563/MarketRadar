@@ -21,39 +21,46 @@ namespace MarketRadar.Services
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120 Safari/537.36"
             );
 
-            var response = await _http.SendAsync(request);
-
-            if (!response.IsSuccessStatusCode)
-                return new PriceTrend();
-
-            var json = await response.Content.ReadAsStringAsync();
-            using var doc = JsonDocument.Parse(json);
-
-            var closes = doc.RootElement
-                .GetProperty("chart")
-                .GetProperty("result")[0]
-                .GetProperty("indicators")
-                .GetProperty("quote")[0]
-                .GetProperty("close");
-
-            var list = new List<decimal>();
-
-            foreach (var item in closes.EnumerateArray())
+            try
             {
-                if (item.ValueKind == JsonValueKind.Number &&
-                    item.TryGetDecimal(out var value))
-                {
-                    list.Add(value);
-                }
-            }
+                var response = await _http.SendAsync(request);
 
-            return BuildTrend(list);
+                if (!response.IsSuccessStatusCode)
+                    return InvalidTrend(symbol, $"Yahoo request failed: {(int)response.StatusCode}");
+
+                var json = await response.Content.ReadAsStringAsync();
+                using var doc = JsonDocument.Parse(json);
+
+                var closes = doc.RootElement
+                    .GetProperty("chart")
+                    .GetProperty("result")[0]
+                    .GetProperty("indicators")
+                    .GetProperty("quote")[0]
+                    .GetProperty("close");
+
+                var list = new List<decimal>();
+
+                foreach (var item in closes.EnumerateArray())
+                {
+                    if (item.ValueKind == JsonValueKind.Number &&
+                        item.TryGetDecimal(out var value))
+                    {
+                        list.Add(value);
+                    }
+                }
+
+                return BuildTrend(symbol, list);
+            }
+            catch (Exception ex)
+            {
+                return InvalidTrend(symbol, $"Yahoo parse failed: {ex.Message}");
+            }
         }
 
-        private static PriceTrend BuildTrend(List<decimal> closes)
+        private static PriceTrend BuildTrend(string symbol, List<decimal> closes)
         {
             if (closes.Count < 2)
-                return new PriceTrend { DataPoints = closes.Count };
+                return InvalidTrend(symbol, $"Only {closes.Count} valid close value(s)");
 
             var latest = closes[^1];
             var oneDayBase = closes[^2];
@@ -73,7 +80,17 @@ namespace MarketRadar.Services
                 PreviousThreeDayChange = GetPreviousThreeDayChange(closes),
                 PreviousFiveDayChange = GetPreviousFiveDayChange(closes),
                 PreviousMomentum = GetPreviousMomentum(closes),
-                DataPoints = closes.Count
+                DataPoints = closes.Count,
+                IsValid = true
+            };
+        }
+
+        private static PriceTrend InvalidTrend(string symbol, string warning)
+        {
+            return new PriceTrend
+            {
+                IsValid = false,
+                Warning = $"{symbol}: {warning}"
             };
         }
 
