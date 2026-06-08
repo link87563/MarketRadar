@@ -74,6 +74,10 @@ Oil 5D：{r.OilTrend.FiveDayChange:F2}%
 ━━━━━━━━━━
 🧠 Analysis
 {GetAnalysis(r)}
+
+━━━━━━━━━━
+🗓 Upcoming Events
+{GetUpcomingEvents(r)}
 """;
         }
 
@@ -114,6 +118,37 @@ Oil 5D：{r.OilTrend.FiveDayChange:F2}%
             return string.Join(
                 Environment.NewLine,
                 r.DataWarnings.Select(x => $"資料警告：{x}"));
+        }
+
+        private string GetUpcomingEvents(RiskReport r)
+        {
+            if (!string.IsNullOrWhiteSpace(r.EconomicCalendarWarning))
+                return $"日曆警告：{r.EconomicCalendarWarning}";
+
+            if (r.UpcomingEvents.Count == 0)
+                return "未來 7 天內沒有篩選到重要 FRED 經濟資料公布。";
+
+            return string.Join(
+                Environment.NewLine,
+                r.UpcomingEvents
+                    .GroupBy(x => x.Date.Date)
+                    .OrderBy(x => x.Key)
+                    .Select(x => $"{x.Key:yyyy-MM-dd}：{string.Join("，", x.Select(FormatUpcomingEvent))}"));
+        }
+
+        private string FormatUpcomingEvent(EconomicCalendarEvent calendarEvent)
+        {
+            return $"{calendarEvent.Name}（{GetImportanceText(calendarEvent.Importance)}）";
+        }
+
+        private string GetImportanceText(string importance)
+        {
+            return importance switch
+            {
+                "High" => "高重要性",
+                "Medium" => "中重要性",
+                _ => "觀察"
+            };
         }
 
         private string GetRegimeText(string regime)

@@ -27,6 +27,7 @@ class Program
                 services.Configure<Setting>(context.Configuration);
 
                 services.AddHttpClient<FredService>();
+                services.AddHttpClient<FredReleaseCalendarService>();
                 services.AddHttpClient<YahooTrendService>();
                 services.AddSingleton<RiskEngineService>();
                 services.AddSingleton<MarketService>();
@@ -41,10 +42,14 @@ class Program
 
         var formatter = host.Services.GetRequiredService<OutputFormatter>();
         var discord = host.Services.GetRequiredService<DiscordService>();
+        var calendar = host.Services.GetRequiredService<FredReleaseCalendarService>();
 
         var marketData = await market.GetRiskAsync();
 
         var report = risk.Calculate(marketData);
+        var calendarResult = await calendar.GetUpcomingEventsAsync();
+        report.UpcomingEvents = calendarResult.Events;
+        report.EconomicCalendarWarning = calendarResult.Warning;
 
         var msg = formatter.ToConsole(report);
 

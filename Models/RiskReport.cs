@@ -33,5 +33,7 @@ namespace MarketRadar.Models
         public PriceTrend OilTrend { get; set; } = new();
         public List<ScoreContribution> ScoreBreakdown { get; set; } = new();
         public List<string> DataWarnings { get; set; } = new();
+        public List<EconomicCalendarEvent> UpcomingEvents { get; set; } = new();
+        public string EconomicCalendarWarning { get; set; } = string.Empty;
     }
 }
