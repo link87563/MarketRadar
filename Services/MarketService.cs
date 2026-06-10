@@ -16,7 +16,7 @@ namespace MarketRadar.Services
         {
             var nasdaqTask = _yahooTrendService.GetTrendAsync("^IXIC");
             var dxyTask = _yahooTrendService.GetTrendAsync("DX-Y.NYB");
-            var spreadTask = _fredService.GetYieldDataAsync();
+            var spreadTask = _fredService.GetYieldSpreadDataAsync();
             var vixTask = _yahooTrendService.GetTrendAsync("^VIX");
             var soxTask = _yahooTrendService.GetTrendAsync("^SOX");
             var tsmTask = _yahooTrendService.GetTrendAsync("TSM");
@@ -31,6 +31,7 @@ namespace MarketRadar.Services
 
             var nasdaq = await nasdaqTask;
             var dxy = await dxyTask;
+            var spread = await spreadTask;
 
             return new MarketData
             {
@@ -38,7 +39,8 @@ namespace MarketRadar.Services
                 DollarChange = dxy.OneDayChange,
                 NasdaqTrend = nasdaq,
                 DollarTrend = dxy,
-                YieldSpread = await spreadTask,
+                YieldSpread = spread.Spread,
+                YieldSpreadDate = spread.LatestDate,
                 VixTrend = await vixTask,
                 SoxTrend = await soxTask,
                 TsmTrend = await tsmTask,

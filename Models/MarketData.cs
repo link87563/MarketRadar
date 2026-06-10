@@ -9,6 +9,7 @@ namespace MarketRadar.Models
     public class MarketData
     {
         public decimal YieldSpread { get; set; }
+        public DateTime? YieldSpreadDate { get; set; }
 
         public decimal NasdaqChange { get; set; }
         public decimal DollarChange { get; set; }

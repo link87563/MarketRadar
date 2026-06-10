@@ -19,6 +19,7 @@ namespace MarketRadar.Models
         public decimal Nasdaq { get; set; }
         public decimal Dxy { get; set; }
         public decimal Spread { get; set; }
+        public DateTime? YieldSpreadDate { get; set; }
 
         public PriceTrend NasdaqTrend { get; set; } = new();
         public PriceTrend DollarTrend { get; set; } = new();

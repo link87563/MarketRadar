@@ -48,12 +48,13 @@ namespace MarketRadar.Services
                 ScoreChange = score - previousScore,
                 ChangeLabel = GetChangeLabel(score - previousScore),
                 Regime = GetRegime(score),
-                Stress = GetStress(nasdaq, dxy),
+                Stress = GetStress(nasdaq, dxy, data.NasdaqTrend, data.VixTrend, data.SoxTrend, data.HygTrend),
                 RiskLabel = GetRiskLabel(score),
 
                 Nasdaq = nasdaq,
                 Dxy = dxy,
                 Spread = spread,
+                YieldSpreadDate = data.YieldSpreadDate,
                 NasdaqTrend = data.NasdaqTrend,
                 DollarTrend = data.DollarTrend,
                 VixTrend = data.VixTrend,
@@ -171,20 +172,45 @@ namespace MarketRadar.Services
 
         private string GetRegime(int score)
         {
-            if (score <= -8) return "CRASH";
-            if (score <= -4) return "RISK-OFF";
+            if (score <= -14) return "CRASH";
+            if (score <= -8) return "RISK-OFF";
+            if (score <= -4) return "CAUTIOUS";
             if (score <= -1) return "CAUTIOUS";
             if (score <= 3) return "NEUTRAL";
             return "RISK-ON";
         }
 
-        private string GetStress(decimal nasdaq, decimal dxy)
+        private string GetStress(
+            decimal nasdaq,
+            decimal dxy,
+            PriceTrend nasdaqTrend,
+            PriceTrend vixTrend,
+            PriceTrend soxTrend,
+            PriceTrend hygTrend)
         {
-            if (nasdaq <= -3 && dxy >= 0.5m)
-                return "HIGH";
+            var equityStress =
+                nasdaq <= -3 ||
+                nasdaqTrend.FiveDayChange <= -5 ||
+                soxTrend.FiveDayChange <= -8;
 
-            if (nasdaq <= -2)
+            var volatilityStress = vixTrend.FiveDayChange >= 15;
+            var creditStress = hygTrend.IsValid && hygTrend.FiveDayChange <= -2;
+            var dollarStress = dxy >= 0.5m;
+
+            if ((equityStress && volatilityStress && (creditStress || dollarStress)) ||
+                (nasdaq <= -5 && dollarStress))
+            {
+                return "HIGH";
+            }
+
+            if (nasdaq <= -2 ||
+                nasdaqTrend.FiveDayChange <= -3 ||
+                soxTrend.FiveDayChange <= -4 ||
+                vixTrend.FiveDayChange >= 8 ||
+                creditStress)
+            {
                 return "MEDIUM";
+            }
 
             return "LOW";
         }
@@ -274,12 +300,44 @@ namespace MarketRadar.Services
         private void AddWarning(List<string> warnings, string name, PriceTrend trend)
         {
             if (!trend.IsValid)
+            {
                 warnings.Add($"{name}: {trend.Warning}");
+                return;
+            }
+
+            if (IsStale(trend.LatestDate))
+            {
+                warnings.Add($"{name}: 最新資料日期 {trend.LatestDate:yyyy-MM-dd} 可能偏舊");
+            }
         }
 
         private string FormatTrend(PriceTrend trend)
         {
             return trend.IsValid ? $"{trend.FiveDayChange:F2}%" : "N/A";
+        }
+
+        private bool IsStale(DateTime? latestDate)
+        {
+            if (latestDate == null)
+                return true;
+
+            return CountBusinessDaysAfter(latestDate.Value.Date, DateTime.Today) > 1;
+        }
+
+        private int CountBusinessDaysAfter(DateTime fromExclusive, DateTime toInclusive)
+        {
+            var count = 0;
+
+            for (var date = fromExclusive.AddDays(1); date <= toInclusive.Date; date = date.AddDays(1))
+            {
+                if (date.DayOfWeek != DayOfWeek.Saturday &&
+                    date.DayOfWeek != DayOfWeek.Sunday)
+                {
+                    count++;
+                }
+            }
+
+            return count;
         }
 
         private string GetRiskLabel(int score)

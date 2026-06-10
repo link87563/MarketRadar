@@ -31,14 +31,19 @@ namespace MarketRadar.Services
                 var json = await response.Content.ReadAsStringAsync();
                 using var doc = JsonDocument.Parse(json);
 
-                var closes = doc.RootElement
+                var result = doc.RootElement
                     .GetProperty("chart")
-                    .GetProperty("result")[0]
+                    .GetProperty("result")[0];
+
+                var timestamps = result.GetProperty("timestamp");
+                var closes = result
                     .GetProperty("indicators")
                     .GetProperty("quote")[0]
                     .GetProperty("close");
 
                 var list = new List<decimal>();
+                var dates = new List<DateTime>();
+                var index = 0;
 
                 foreach (var item in closes.EnumerateArray())
                 {
@@ -46,10 +51,22 @@ namespace MarketRadar.Services
                         item.TryGetDecimal(out var value))
                     {
                         list.Add(value);
+
+                        if (index < timestamps.GetArrayLength() &&
+                            timestamps[index].TryGetInt64(out var unixSeconds))
+                        {
+                            dates.Add(DateTimeOffset.FromUnixTimeSeconds(unixSeconds).LocalDateTime.Date);
+                        }
+                        else
+                        {
+                            dates.Add(DateTime.Today);
+                        }
                     }
+
+                    index++;
                 }
 
-                return BuildTrend(symbol, list);
+                return BuildTrend(symbol, list, dates);
             }
             catch (Exception ex)
             {
@@ -57,7 +74,7 @@ namespace MarketRadar.Services
             }
         }
 
-        private static PriceTrend BuildTrend(string symbol, List<decimal> closes)
+        private static PriceTrend BuildTrend(string symbol, List<decimal> closes, List<DateTime> dates)
         {
             if (closes.Count < 2)
                 return InvalidTrend(symbol, $"Only {closes.Count} valid close value(s)");
@@ -81,6 +98,7 @@ namespace MarketRadar.Services
                 PreviousFiveDayChange = GetPreviousFiveDayChange(closes),
                 PreviousMomentum = GetPreviousMomentum(closes),
                 DataPoints = closes.Count,
+                LatestDate = dates.Count > 0 ? dates[^1] : null,
                 IsValid = true
             };
         }

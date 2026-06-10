@@ -38,6 +38,7 @@ Nasdaq：{r.Nasdaq:F2}%
 DXY：{r.Dxy:F2}%
 DXY 說明：美元指數，衡量美元相對一籃子主要貨幣的強弱
 10Y-2Y：{r.Spread:F2}
+資料日期：Nasdaq {FormatDate(r.NasdaqTrend.LatestDate)}，DXY {FormatDate(r.DollarTrend.LatestDate)}，10Y-2Y {FormatDate(r.YieldSpreadDate)}
 
 ━━━━━━━━━━
 📈 5D Trend
@@ -58,6 +59,7 @@ TSM ADR 5D：{r.TsmTrend.FiveDayChange:F2}%
 Gold 5D：{r.GoldTrend.FiveDayChange:F2}%
 BTC 5D：{r.BtcTrend.FiveDayChange:F2}%
 USD/TWD 5D：{r.UsdTwdTrend.FiveDayChange:F2}%
+資料日期：VIX {FormatDate(r.VixTrend.LatestDate)}，SOX {FormatDate(r.SoxTrend.LatestDate)}，TSM {FormatDate(r.TsmTrend.LatestDate)}，Gold {FormatDate(r.GoldTrend.LatestDate)}，BTC {FormatDate(r.BtcTrend.LatestDate)}，USD/TWD {FormatDate(r.UsdTwdTrend.LatestDate)}
 
 ━━━━━━━━━━
 🧭 Rates / Credit / Commodity
@@ -66,6 +68,7 @@ TLT（長天期美債），HYG（高收益債）
 TLT 5D：{r.TltTrend.FiveDayChange:F2}%
 HYG 5D：{r.HygTrend.FiveDayChange:F2}%
 Oil 5D：{r.OilTrend.FiveDayChange:F2}%
+資料日期：TLT {FormatDate(r.TltTrend.LatestDate)}，HYG {FormatDate(r.HygTrend.LatestDate)}，Oil {FormatDate(r.OilTrend.LatestDate)}
 
 ━━━━━━━━━━
 📌 Interpretation
@@ -94,7 +97,8 @@ Oil 5D：{r.OilTrend.FiveDayChange:F2}%
                 GetGoldBtcComment(r),
                 GetUsdTwdComment(r),
                 GetRatesCreditComment(r),
-                GetOilComment(r)
+                GetOilComment(r),
+                GetRiskConcentrationComment(r)
             };
 
             return string.Join(Environment.NewLine, lines);
@@ -236,10 +240,18 @@ Oil 5D：{r.OilTrend.FiveDayChange:F2}%
             return value > 0 ? $"+{value}" : value.ToString();
         }
 
+        private string FormatDate(DateTime? date)
+        {
+            return date?.ToString("yyyy-MM-dd") ?? "N/A";
+        }
+
         private string GetNasdaqTrendComment(RiskReport r)
         {
             if (r.Nasdaq <= -2 && r.NasdaqTrend.FiveDayChange <= -3)
                 return $"Nasdaq 不是單日下跌，而是 3-5 日趨勢轉弱，5 日累計 {r.NasdaqTrend.FiveDayChange:F2}%。";
+
+            if (r.NasdaqTrend.FiveDayChange <= -3 || r.NasdaqTrend.Momentum <= -1)
+                return $"Nasdaq 單日跌幅不大，但 5 日趨勢與 Momentum 已轉弱，5 日累計 {r.NasdaqTrend.FiveDayChange:F2}%，Momentum {r.NasdaqTrend.Momentum:F2}%。";
 
             if (r.Nasdaq <= -2)
                 return "Nasdaq 單日跌幅明顯，但 5 日趨勢尚未全面轉弱。";
@@ -363,6 +375,24 @@ Oil 5D：{r.OilTrend.FiveDayChange:F2}%
                 return "Oil 與股市同步偏強，市場可能在交易景氣預期改善。";
 
             return "Oil 短線沒有給出強烈方向，暫時作為通膨與景氣需求的輔助觀察。";
+        }
+
+        private string GetRiskConcentrationComment(RiskReport r)
+        {
+            var equityStress = r.NasdaqTrend.FiveDayChange <= -3 || r.SoxTrend.FiveDayChange <= -4 || r.VixTrend.FiveDayChange >= 8;
+            var systemicStress =
+                r.DollarTrend.FiveDayChange >= 1 ||
+                r.HygTrend.FiveDayChange <= -2 ||
+                r.TltTrend.FiveDayChange <= -3 ||
+                r.UsdTwdTrend.FiveDayChange >= 0.8m;
+
+            if (equityStress && !systemicStress)
+                return "目前壓力主要集中在科技股、半導體與波動率，尚未明顯擴散到美元、信用債或台幣資金面。";
+
+            if (equityStress && systemicStress)
+                return "股市壓力已伴隨美元、信用債、利率或匯率壓力，risk-off 有擴散跡象。";
+
+            return "目前沒有看到明顯跨市場壓力集中或擴散。";
         }
 
         private string GetComment(RiskReport r)

@@ -22,13 +22,23 @@ namespace MarketRadar.Services
 
         public async Task<decimal> GetYieldDataAsync()
         {
+            var data = await GetYieldSpreadDataAsync();
+            return data.Spread;
+        }
+
+        public async Task<YieldSpreadData> GetYieldSpreadDataAsync()
+        {
             var ten = await GetSeries("DGS10");
             var two = await GetSeries("DGS2");
 
-            return ten - two;
+            return new YieldSpreadData
+            {
+                Spread = ten.Value - two.Value,
+                LatestDate = GetEarlierDate(ten.Date, two.Date)
+            };
         }
 
-        private async Task<decimal> GetSeries(string id)
+        private async Task<(decimal Value, DateTime? Date)> GetSeries(string id)
         {
             string url =
                 $"https://api.stlouisfed.org/fred/series/observations" +
@@ -46,10 +56,24 @@ namespace MarketRadar.Services
                 var v = obs[i].GetProperty("value").GetString();
 
                 if (decimal.TryParse(v, out var result))
-                    return result;
+                {
+                    var dateText = data.GetProperty("date").GetString();
+                    DateTime? date = DateTime.TryParse(dateText, out var parsedDate)
+                        ? parsedDate.Date
+                        : null;
+
+                    return (result, date);
+                }
             }
 
-            return 0;
+            return (0, null);
+        }
+
+        private DateTime? GetEarlierDate(DateTime? first, DateTime? second)
+        {
+            if (first == null) return second;
+            if (second == null) return first;
+            return first <= second ? first : second;
         }
     }
 }
