@@ -96,7 +96,7 @@ namespace MarketRadar.Services
                 {
                     Name = "Nasdaq",
                     Score = nasdaqScore,
-                    Reason = $"1D {nasdaq:F2}%"
+                    Reason = $"{GetSymbolLabel(nasdaqTrend, "Nasdaq")} 1D {nasdaq:F2}%"
                 },
                 new()
                 {
@@ -120,7 +120,7 @@ namespace MarketRadar.Services
                 {
                     Name = "Cross Asset",
                     Score = crossAssetScore,
-                    Reason = $"VIX 5D {FormatTrend(vixTrend)}, SOX 5D {FormatTrend(soxTrend)}, TSM 5D {FormatTrend(tsmTrend)}"
+                    Reason = $"VIX 5D {FormatTrend(vixTrend)}, {GetSymbolLabel(soxTrend, "SOX")} 5D {FormatTrend(soxTrend)}, TSM 5D {FormatTrend(tsmTrend)}"
                 },
                 new()
                 {
@@ -305,6 +305,11 @@ namespace MarketRadar.Services
                 return;
             }
 
+            if (!string.IsNullOrWhiteSpace(trend.FallbackFromSymbol))
+            {
+                warnings.Add($"{name}: 使用 {trend.Symbol} fallback，原始 {trend.FallbackFromSymbol} 資料可能偏舊");
+            }
+
             if (IsStale(trend.LatestDate))
             {
                 warnings.Add($"{name}: 最新資料日期 {trend.LatestDate:yyyy-MM-dd} 可能偏舊");
@@ -314,6 +319,13 @@ namespace MarketRadar.Services
         private string FormatTrend(PriceTrend trend)
         {
             return trend.IsValid ? $"{trend.FiveDayChange:F2}%" : "N/A";
+        }
+
+        private string GetSymbolLabel(PriceTrend trend, string defaultLabel)
+        {
+            return string.IsNullOrWhiteSpace(trend.Symbol)
+                ? defaultLabel
+                : trend.Symbol;
         }
 
         private bool IsStale(DateTime? latestDate)

@@ -12,7 +12,7 @@ namespace MarketRadar.Services
             _http = http;
         }
 
-        public async Task<PriceTrend> GetTrendAsync(string symbol)
+        public async Task<PriceTrend> GetTrendAsync(string symbol, DateTime? asOfDate = null)
         {
             var url = $"https://query1.finance.yahoo.com/v8/finance/chart/{Uri.EscapeDataString(symbol)}?interval=1d&range=5d";
             var request = new HttpRequestMessage(HttpMethod.Get, url);
@@ -50,17 +50,26 @@ namespace MarketRadar.Services
                     if (item.ValueKind == JsonValueKind.Number &&
                         item.TryGetDecimal(out var value))
                     {
-                        list.Add(value);
+                        DateTime pointDate;
 
                         if (index < timestamps.GetArrayLength() &&
                             timestamps[index].TryGetInt64(out var unixSeconds))
                         {
-                            dates.Add(DateTimeOffset.FromUnixTimeSeconds(unixSeconds).LocalDateTime.Date);
+                            pointDate = DateTimeOffset.FromUnixTimeSeconds(unixSeconds).LocalDateTime.Date;
                         }
                         else
                         {
-                            dates.Add(DateTime.Today);
+                            pointDate = DateTime.Today;
                         }
+
+                        if (asOfDate.HasValue && pointDate.Date > asOfDate.Value.Date)
+                        {
+                            index++;
+                            continue;
+                        }
+
+                        list.Add(value);
+                        dates.Add(pointDate);
                     }
 
                     index++;
@@ -72,6 +81,26 @@ namespace MarketRadar.Services
             {
                 return InvalidTrend(symbol, $"Yahoo parse failed: {ex.Message}");
             }
+        }
+
+        public async Task<PriceTrend> GetTrendWithFallbackAsync(string primarySymbol, string fallbackSymbol, DateTime? asOfDate = null)
+        {
+            var primary = await GetTrendAsync(primarySymbol, asOfDate);
+
+            if (primary.IsValid && !IsStale(primary.LatestDate))
+                return primary;
+
+            var fallback = await GetTrendAsync(fallbackSymbol, asOfDate);
+
+            if (!fallback.IsValid)
+                return primary;
+
+            fallback.FallbackFromSymbol = primarySymbol;
+
+            if (primary.IsValid && IsStale(primary.LatestDate))
+                fallback.Warning = $"{primarySymbol} latest data date {primary.LatestDate:yyyy-MM-dd} may be stale; using {fallbackSymbol} fallback";
+
+            return fallback;
         }
 
         private static PriceTrend BuildTrend(string symbol, List<decimal> closes, List<DateTime> dates)
@@ -99,7 +128,8 @@ namespace MarketRadar.Services
                 PreviousMomentum = GetPreviousMomentum(closes),
                 DataPoints = closes.Count,
                 LatestDate = dates.Count > 0 ? dates[^1] : null,
-                IsValid = true
+                IsValid = true,
+                Symbol = symbol
             };
         }
 
@@ -108,8 +138,33 @@ namespace MarketRadar.Services
             return new PriceTrend
             {
                 IsValid = false,
+                Symbol = symbol,
                 Warning = $"{symbol}: {warning}"
             };
+        }
+
+        private static bool IsStale(DateTime? latestDate)
+        {
+            if (latestDate == null)
+                return true;
+
+            return CountBusinessDaysAfter(latestDate.Value.Date, DateTime.Today) > 1;
+        }
+
+        private static int CountBusinessDaysAfter(DateTime fromExclusive, DateTime toInclusive)
+        {
+            var count = 0;
+
+            for (var date = fromExclusive.AddDays(1); date <= toInclusive.Date; date = date.AddDays(1))
+            {
+                if (date.DayOfWeek != DayOfWeek.Saturday &&
+                    date.DayOfWeek != DayOfWeek.Sunday)
+                {
+                    count++;
+                }
+            }
+
+            return count;
         }
 
         private static decimal GetPreviousOneDayChange(List<decimal> closes)

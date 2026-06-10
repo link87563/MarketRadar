@@ -14,5 +14,7 @@ namespace MarketRadar.Models
         public DateTime? LatestDate { get; set; }
         public bool IsValid { get; set; }
         public string Warning { get; set; } = string.Empty;
+        public string Symbol { get; set; } = string.Empty;
+        public string FallbackFromSymbol { get; set; } = string.Empty;
     }
 }
