@@ -29,6 +29,7 @@ class Program
                 services.AddHttpClient<FredService>();
                 services.AddHttpClient<FredReleaseCalendarService>();
                 services.AddHttpClient<YahooTrendService>();
+                services.AddHttpClient<GeminiCommentaryService>();
                 services.AddSingleton<RiskEngineService>();
                 services.AddSingleton<MarketService>();
                 services.AddSingleton<OutputFormatter>();
@@ -43,7 +44,9 @@ class Program
         var formatter = host.Services.GetRequiredService<OutputFormatter>();
         var discord = host.Services.GetRequiredService<DiscordService>();
         var calendar = host.Services.GetRequiredService<FredReleaseCalendarService>();
+        var gemini = host.Services.GetRequiredService<GeminiCommentaryService>();
 
+        Log.Information("Start fetching market data...");
         var marketData = await market.GetRiskAsync();
 
         var report = risk.Calculate(marketData);
@@ -51,10 +54,22 @@ class Program
         report.UpcomingEvents = calendarResult.Events;
         report.EconomicCalendarWarning = calendarResult.Warning;
 
-        var msg = formatter.ToConsole(report);
+        var rawMsg = formatter.ToConsole(report);
+        Log.Information("Start calling Gemini API for market commentary...");
+        var commentary = await gemini.GenerateAsync(rawMsg);
+        var msg = string.IsNullOrWhiteSpace(commentary)
+            ? rawMsg
+            : $"""
+{rawMsg}
+
+━━━━━━━━━━
+🧠 Gemini Market Commentary
+{commentary}
+""";
 
         Log.Information(msg);
 
+        Log.Information("Send report to Discord...");
         await discord.SendAsync(msg);
 
     }

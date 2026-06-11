@@ -87,8 +87,11 @@ namespace MarketRadar.Services
             var dxyScore = GetDxyScore(dxy);
             var spreadScore = GetSpreadScore(spread);
             var momentumScore = GetMomentumScore(nasdaqTrend, dxyTrend);
-            var crossAssetScore = GetCrossAssetScore(vixTrend, soxTrend, tsmTrend);
-            var ratesCreditScore = GetRatesCreditScore(tltTrend, hygTrend);
+            var vixScore = GetVixScore(vixTrend);
+            var soxScore = GetSoxScore(soxTrend);
+            var tsmScore = GetTsmScore(tsmTrend);
+            var hygScore = GetHygScore(hygTrend);
+            var tltScore = GetTltScore(tltTrend);
 
             return new List<ScoreContribution>
             {
@@ -118,15 +121,39 @@ namespace MarketRadar.Services
                 },
                 new()
                 {
-                    Name = "Cross Asset",
-                    Score = crossAssetScore,
-                    Reason = $"VIX 5D {FormatTrend(vixTrend)}, {GetSymbolLabel(soxTrend, "SOX")} 5D {FormatTrend(soxTrend)}, TSM 5D {FormatTrend(tsmTrend)}"
+                    Name = "VIX",
+                    Score = vixScore,
+                    Reason = $"5D {FormatTrend(vixTrend)}；上升代表波動與避險需求升溫"
                 },
                 new()
                 {
-                    Name = "Rates/Credit",
-                    Score = ratesCreditScore,
-                    Reason = $"TLT 5D {FormatTrend(tltTrend)}, HYG 5D {FormatTrend(hygTrend)}"
+                    Name = "SOX",
+                    Score = soxScore,
+                    Reason = $"{GetSymbolLabel(soxTrend, "SOX")} 5D {FormatTrend(soxTrend)}；半導體風險偏台股外部壓力"
+                },
+                new()
+                {
+                    Name = "TSM ADR",
+                    Score = tsmScore,
+                    Reason = $"5D {FormatTrend(tsmTrend)}；台積電 ADR 偏台股權值股壓力"
+                },
+                new()
+                {
+                    Name = "Gold/BTC",
+                    Score = 0,
+                    Reason = "觀察型訊號，目前不直接加減分；只用來確認防禦或風險偏好是否同步"
+                },
+                new()
+                {
+                    Name = "HYG",
+                    Score = hygScore,
+                    Reason = $"5D {FormatTrend(hygTrend)}；高收益債下跌代表信用風險升溫"
+                },
+                new()
+                {
+                    Name = "TLT",
+                    Score = tltScore,
+                    Reason = $"5D {FormatTrend(tltTrend)}；長債大跌偏利率壓力，大漲偏避險或降息預期"
                 }
             };
         }
@@ -232,50 +259,61 @@ namespace MarketRadar.Services
             return score;
         }
 
-        private int GetRatesCreditScore(PriceTrend tlt, PriceTrend hyg)
+        private int GetHygScore(PriceTrend hyg)
         {
-            var score = 0;
-
             if (hyg.IsValid)
             {
-                if (hyg.FiveDayChange <= -2) score -= 3;
-                else if (hyg.FiveDayChange <= -1) score -= 1;
-                else if (hyg.FiveDayChange >= 1.5m) score += 1;
+                if (hyg.FiveDayChange <= -2) return -3;
+                if (hyg.FiveDayChange <= -1) return -1;
+                if (hyg.FiveDayChange >= 1.5m) return 1;
             }
 
-            if (tlt.IsValid)
-            {
-                if (tlt.FiveDayChange <= -3) score -= 2;
-                else if (tlt.FiveDayChange >= 3) score += 1;
-            }
-
-            return score;
+            return 0;
         }
 
-        private int GetCrossAssetScore(PriceTrend vix, PriceTrend sox, PriceTrend tsm)
+        private int GetTltScore(PriceTrend tlt)
         {
-            var score = 0;
+            if (tlt.IsValid)
+            {
+                if (tlt.FiveDayChange <= -3) return -2;
+                if (tlt.FiveDayChange >= 3) return 1;
+            }
 
+            return 0;
+        }
+
+        private int GetVixScore(PriceTrend vix)
+        {
             if (vix.IsValid)
             {
-                if (vix.FiveDayChange >= 15) score -= 3;
-                else if (vix.FiveDayChange >= 8) score -= 2;
-                else if (vix.FiveDayChange <= -10) score += 2;
+                if (vix.FiveDayChange >= 15) return -3;
+                if (vix.FiveDayChange >= 8) return -2;
+                if (vix.FiveDayChange <= -10) return 2;
             }
 
+            return 0;
+        }
+
+        private int GetSoxScore(PriceTrend sox)
+        {
             if (sox.IsValid)
             {
-                if (sox.FiveDayChange <= -4) score -= 2;
-                else if (sox.FiveDayChange >= 4) score += 1;
+                if (sox.FiveDayChange <= -4) return -2;
+                if (sox.FiveDayChange >= 4) return 1;
             }
 
+            return 0;
+        }
+
+        private int GetTsmScore(PriceTrend tsm)
+        {
             if (tsm.IsValid)
             {
-                if (tsm.FiveDayChange <= -4) score -= 2;
-                else if (tsm.FiveDayChange >= 4) score += 1;
+                if (tsm.FiveDayChange <= -4) return -2;
+                if (tsm.FiveDayChange >= 4) return 1;
             }
 
-            return score;
+            return 0;
         }
 
         private List<string> GetDataWarnings(MarketData data)

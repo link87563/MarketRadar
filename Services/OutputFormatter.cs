@@ -12,7 +12,11 @@ namespace MarketRadar.Services
         public string ToConsole(RiskReport r)
         {
             return $"""
-📊 AI Risk Radar 時間：{DateTime.Now:yyyy-MM-dd HH:mm:ss}
+📊 AI Risk Radar 資料基準日：{GetReportDataDate(r)}
+━━━━━━━━━━
+🧪 Data Quality
+{GetDataQuality(r)}
+
 ━━━━━━━━━━
 📌 Market Regime
 Regime：{GetRegimeText(r.Regime)}
@@ -23,14 +27,11 @@ Stress：{GetStressText(r.Stress)}
 📈 Score：{r.Score}
 Previous：{r.PreviousScore}
 Change：{FormatSigned(r.ScoreChange)}（{r.ChangeLabel}）
+{GetScoreGuide()}
 
 ━━━━━━━━━━
 🧾 Score Breakdown
 {GetScoreBreakdown(r)}
-
-━━━━━━━━━━
-🧪 Data Quality
-{GetDataQuality(r)}
 
 ━━━━━━━━━━
 📡 Market Data
@@ -92,6 +93,7 @@ Oil 5D：{r.OilTrend.FiveDayChange:F2}%
                 GetNasdaqTrendComment(r),
                 GetDxyTrendComment(r),
                 GetYieldSpreadComment(r),
+                GetScoreChangeBenchmarkComment(r),
                 GetVixComment(r),
                 GetTaiwanTechComment(r),
                 GetGoldBtcComment(r),
@@ -112,6 +114,16 @@ Oil 5D：{r.OilTrend.FiveDayChange:F2}%
             return string.Join(
                 Environment.NewLine,
                 r.ScoreBreakdown.Select(x => $"{x.Name}：{FormatSigned(x.Score)}（{x.Reason}）"));
+        }
+
+        private string GetScoreGuide()
+        {
+            return """
+分數說明：模型實務區間約 -30 到 +12；分數越低風險越高，分數越高代表風險承擔環境越友善。
+Regime 閾值：<= -14 CRASH，-13 到 -8 RISK-OFF，-7 到 -1 CAUTIOUS，0 到 3 NEUTRAL，>= 4 RISK-ON。
+Risk 閾值：<= -12 EXTREME，-11 到 -8 HIGH，-7 到 -4 ELEVATED，-3 到 -1 CAUTION，0 到 2 NEUTRAL，>= 3 RISK ON。
+變化基準：單日變化 0-1 分多屬雜訊，2-4 分代表明顯變化，5 分以上代表大型風險重估。
+""";
         }
 
         private string GetDataQuality(RiskReport r)
@@ -245,6 +257,11 @@ Oil 5D：{r.OilTrend.FiveDayChange:F2}%
             return date?.ToString("yyyy-MM-dd") ?? "N/A";
         }
 
+        private string GetReportDataDate(RiskReport r)
+        {
+            return r.NasdaqTrend.LatestDate?.ToString("yyyy-MM-dd") ?? "N/A";
+        }
+
         private string GetNasdaqTrendComment(RiskReport r)
         {
             if (r.Nasdaq <= -2 && r.NasdaqTrend.FiveDayChange <= -3)
@@ -287,6 +304,19 @@ Oil 5D：{r.OilTrend.FiveDayChange:F2}%
             return $"10Y-2Y 還是正的 {r.Spread:F2}，代表殖利率曲線本身不是最壞狀態，但不足以抵銷股市與美元的 risk-off（避險模式，資金降低風險資產曝險）訊號。";
         }
 
+        private string GetScoreChangeBenchmarkComment(RiskReport r)
+        {
+            var absoluteChange = Math.Abs(r.ScoreChange);
+
+            if (absoluteChange >= 5)
+                return $"Score 從 {r.PreviousScore} 到 {r.Score}，變化 {FormatSigned(r.ScoreChange)} 分，屬於大型風險重估，不是一般日內雜訊。";
+
+            if (absoluteChange >= 2)
+                return $"Score 從 {r.PreviousScore} 到 {r.Score}，變化 {FormatSigned(r.ScoreChange)} 分，屬於明顯但仍需隔日確認的變化。";
+
+            return $"Score 從 {r.PreviousScore} 到 {r.Score}，變化 {FormatSigned(r.ScoreChange)} 分，屬於小幅變動，暫時不宜過度解讀。";
+        }
+
         private string GetVixComment(RiskReport r)
         {
             if (r.VixTrend.FiveDayChange >= 15)
@@ -321,15 +351,15 @@ Oil 5D：{r.OilTrend.FiveDayChange:F2}%
         private string GetGoldBtcComment(RiskReport r)
         {
             if (r.GoldTrend.FiveDayChange > 1 && r.BtcTrend.FiveDayChange < -3)
-                return $"Gold 上漲、BTC 下跌，資金偏向防禦，風險偏好正在降溫。";
+                return $"Gold 上漲、BTC 下跌，資金偏向防禦，風險偏好正在降溫；此訊號目前作為確認用，不直接加減分。";
 
             if (r.GoldTrend.FiveDayChange < -1 && r.BtcTrend.FiveDayChange < -3)
-                return "Gold 與 BTC 同步轉弱，可能反映美元壓制或流動性收縮壓力。";
+                return "Gold 與 BTC 同步轉弱，可能反映美元壓制或流動性收縮壓力；因方向可能來自美元或流動性，暫不直接加減分。";
 
             if (r.BtcTrend.FiveDayChange > 5)
-                return $"BTC 5 日上漲 {r.BtcTrend.FiveDayChange:F2}%，高風險資產情緒仍有支撐。";
+                return $"BTC 5 日上漲 {r.BtcTrend.FiveDayChange:F2}%，高風險資產情緒仍有支撐；但 BTC 波動較高，目前只作為風險偏好確認訊號。";
 
-            return "Gold/BTC 沒有給出強烈單邊訊號，跨資產情緒以股市與美元訊號為主。";
+            return $"Gold 5D {r.GoldTrend.FiveDayChange:F2}%、BTC 5D {r.BtcTrend.FiveDayChange:F2}%，沒有形成「Gold 強、BTC 弱」或「BTC 大幅轉強」的明確組合，因此只列為觀察，不直接影響分數。";
         }
 
         private string GetUsdTwdComment(RiskReport r)
@@ -356,6 +386,9 @@ Oil 5D：{r.OilTrend.FiveDayChange:F2}%
 
             if (r.TltTrend.FiveDayChange >= 3)
                 return $"TLT（長天期美債）5 日上漲 {r.TltTrend.FiveDayChange:F2}%，可能代表避險買債或降息預期升溫。";
+
+            if (Math.Abs(r.TltTrend.FiveDayChange) < 1)
+                return $"TLT（長天期美債）5 日僅 {r.TltTrend.FiveDayChange:F2}%，屬於接近持平，暫時不能解讀為明確避險買債或利率壓力。";
 
             if (r.HygTrend.FiveDayChange >= 1.5m)
                 return $"HYG（高收益債）5 日上漲 {r.HygTrend.FiveDayChange:F2}%，信用市場相對穩定，對 risk-on 有支撐。";

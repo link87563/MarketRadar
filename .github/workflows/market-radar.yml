@@ -30,3 +30,6 @@ jobs:
         env:
           FredApiKey: ${{ secrets.FRED_API_KEY }}
           DiscordSetting__WebhookUrl: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          GeminiSetting__Enabled: "true"
+          GeminiSetting__ApiKey: ${{ secrets.GEMINI_API_KEY }}
+          GeminiSetting__PromptFile: Prompts/gemini-commentary.md
