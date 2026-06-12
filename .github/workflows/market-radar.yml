@@ -33,3 +33,5 @@ jobs:
           GeminiSetting__Enabled: "true"
           GeminiSetting__ApiKey: ${{ secrets.GEMINI_API_KEY }}
           GeminiSetting__PromptFile: Prompts/gemini-commentary.md
+          GeminiSetting__VoiceScriptEnabled: "true"
+          GeminiSetting__VoiceScriptPromptFile: Prompts/gemini-voice-script-30s.md

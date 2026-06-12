@@ -25,15 +25,49 @@ Write a concise Traditional Chinese market commentary with: summary, key drivers
 
         public async Task<string> GenerateAsync(string report)
         {
+            return await GenerateAsync(
+                report,
+                GetPrompt(_setting.PromptFile, _setting.Prompt, DefaultPrompt),
+                _setting.MaxOutputTokens,
+                "market commentary");
+        }
+
+        public async Task<string> GenerateVoiceScriptAsync(string report, string commentary)
+        {
+            if (!_setting.VoiceScriptEnabled)
+            {
+                Log.Information("Gemini voice script is disabled.");
+                return string.Empty;
+            }
+
+            var input = string.IsNullOrWhiteSpace(commentary)
+                ? report
+                : $"""
+MarketRadar Report:
+{report}
+
+Gemini Market Commentary:
+{commentary}
+""";
+
+            return await GenerateAsync(
+                input,
+                GetPrompt(_setting.VoiceScriptPromptFile, _setting.VoiceScriptPrompt, DefaultPrompt),
+                _setting.VoiceScriptMaxOutputTokens,
+                "30s voice script");
+        }
+
+        private async Task<string> GenerateAsync(string input, string prompt, int maxOutputTokens, string purpose)
+        {
             if (!_setting.Enabled)
             {
-                Log.Information("Gemini commentary is disabled.");
+                Log.Information("Gemini {Purpose} is disabled.", purpose);
                 return string.Empty;
             }
 
             if (string.IsNullOrWhiteSpace(_setting.ApiKey))
             {
-                Log.Warning("Gemini commentary is enabled but GeminiSetting:ApiKey is empty.");
+                Log.Warning("Gemini {Purpose} is enabled but GeminiSetting:ApiKey is empty.", purpose);
                 return string.Empty;
             }
 
@@ -43,7 +77,7 @@ Write a concise Traditional Chinese market commentary with: summary, key drivers
                 {
                     try
                     {
-                        var result = await GenerateWithModelAsync(model, report);
+                        var result = await GenerateWithModelAsync(model, input, prompt, maxOutputTokens, purpose);
                         if (!string.IsNullOrWhiteSpace(result.Text))
                             return result.Text;
 
@@ -55,8 +89,9 @@ Write a concise Traditional Chinese market commentary with: summary, key drivers
 
                         var delay = TimeSpan.FromSeconds(Math.Max(1, _setting.RetryDelaySeconds) * attempt);
                         Log.Warning(
-                            "Gemini model {Model} is temporarily unavailable. Retry {Attempt}/{MaxAttempts} after {DelaySeconds}s.",
+                            "Gemini model {Model} is temporarily unavailable for {Purpose}. Retry {Attempt}/{MaxAttempts} after {DelaySeconds}s.",
                             model,
+                            purpose,
                             attempt,
                             _setting.RetryCount + 1,
                             delay.TotalSeconds);
@@ -64,7 +99,7 @@ Write a concise Traditional Chinese market commentary with: summary, key drivers
                     }
                     catch (Exception ex)
                     {
-                        Log.Warning(ex, "Gemini commentary generation failed with model {Model}.", model);
+                        Log.Warning(ex, "Gemini {Purpose} generation failed with model {Model}.", purpose, model);
                         break;
                     }
                 }
@@ -73,12 +108,17 @@ Write a concise Traditional Chinese market commentary with: summary, key drivers
             return string.Empty;
         }
 
-        private async Task<GeminiResult> GenerateWithModelAsync(string model, string report)
+        private async Task<GeminiResult> GenerateWithModelAsync(
+            string model,
+            string input,
+            string prompt,
+            int maxOutputTokens,
+            string purpose)
         {
             var url = $"https://generativelanguage.googleapis.com/v1beta/models/{NormalizeModelName(model)}:generateContent";
             using var request = new HttpRequestMessage(HttpMethod.Post, url);
             request.Headers.Add("x-goog-api-key", _setting.ApiKey);
-            request.Content = JsonContent.Create(BuildRequest(report));
+            request.Content = JsonContent.Create(BuildRequest(input, prompt, maxOutputTokens));
 
             using var response = await _http.SendAsync(request);
             var body = await response.Content.ReadAsStringAsync();
@@ -86,7 +126,8 @@ Write a concise Traditional Chinese market commentary with: summary, key drivers
             if (!response.IsSuccessStatusCode)
             {
                 Log.Warning(
-                    "Gemini commentary request failed. Model={Model}, StatusCode={StatusCode}, Body={Body}",
+                    "Gemini {Purpose} request failed. Model={Model}, StatusCode={StatusCode}, Body={Body}",
+                    purpose,
                     model,
                     response.StatusCode,
                     body);
@@ -101,15 +142,15 @@ Write a concise Traditional Chinese market commentary with: summary, key drivers
             var text = ExtractText(body);
             if (string.IsNullOrWhiteSpace(text))
             {
-                Log.Warning("Gemini commentary response did not contain text. Model={Model}", model);
+                Log.Warning("Gemini {Purpose} response did not contain text. Model={Model}", purpose, model);
                 return new GeminiResult(string.Empty, ShouldRetry: false, ShouldTryNextModel: true);
             }
 
-            Log.Information("Gemini commentary generated successfully. Model={Model}", model);
+            Log.Information("Gemini {Purpose} generated successfully. Model={Model}", purpose, model);
             return new GeminiResult(text, ShouldRetry: false, ShouldTryNextModel: false);
         }
 
-        private object BuildRequest(string report)
+        private object BuildRequest(string input, string prompt, int maxOutputTokens)
         {
             return new
             {
@@ -117,7 +158,7 @@ Write a concise Traditional Chinese market commentary with: summary, key drivers
                 {
                     parts = new[]
                     {
-                        new { text = GetPrompt() }
+                        new { text = prompt }
                     }
                 },
                 contents = new[]
@@ -128,7 +169,7 @@ Write a concise Traditional Chinese market commentary with: summary, key drivers
                         {
                             new
                             {
-                                text = "Please analyze this MarketRadar raw report:\n\n" + report
+                                text = "Please analyze this input:\n\n" + input
                             }
                         }
                     }
@@ -136,32 +177,53 @@ Write a concise Traditional Chinese market commentary with: summary, key drivers
                 generationConfig = new
                 {
                     temperature = 0.4,
-                    maxOutputTokens = Math.Max(256, _setting.MaxOutputTokens)
+                    maxOutputTokens = Math.Max(256, maxOutputTokens)
                 }
             };
         }
 
-        private string GetPrompt()
+        private string GetPrompt(string promptFile, string prompt, string defaultPrompt)
         {
-            if (!string.IsNullOrWhiteSpace(_setting.PromptFile))
+            if (!string.IsNullOrWhiteSpace(promptFile))
             {
                 try
                 {
-                    if (File.Exists(_setting.PromptFile))
-                        return File.ReadAllText(_setting.PromptFile).Trim();
+                    var resolvedPromptFile = ResolvePromptFile(promptFile);
+                    if (!string.IsNullOrWhiteSpace(resolvedPromptFile))
+                        return File.ReadAllText(resolvedPromptFile).Trim();
 
-                    Log.Warning("Gemini prompt file not found: {PromptFile}", _setting.PromptFile);
+                    Log.Warning(
+                        "Gemini prompt file not found: {PromptFile}. CurrentDirectory={CurrentDirectory}, BaseDirectory={BaseDirectory}",
+                        promptFile,
+                        Directory.GetCurrentDirectory(),
+                        AppContext.BaseDirectory);
                 }
                 catch (Exception ex)
                 {
-                    Log.Warning(ex, "Failed to read Gemini prompt file: {PromptFile}", _setting.PromptFile);
+                    Log.Warning(ex, "Failed to read Gemini prompt file: {PromptFile}", promptFile);
                 }
             }
 
-            if (!string.IsNullOrWhiteSpace(_setting.Prompt))
-                return _setting.Prompt.Trim();
+            if (!string.IsNullOrWhiteSpace(prompt))
+                return prompt.Trim();
 
-            return DefaultPrompt;
+            return defaultPrompt;
+        }
+
+        private static string ResolvePromptFile(string promptFile)
+        {
+            if (Path.IsPathRooted(promptFile))
+                return File.Exists(promptFile) ? promptFile : string.Empty;
+
+            var currentDirectoryPath = Path.GetFullPath(promptFile, Directory.GetCurrentDirectory());
+            if (File.Exists(currentDirectoryPath))
+                return currentDirectoryPath;
+
+            var baseDirectoryPath = Path.GetFullPath(promptFile, AppContext.BaseDirectory);
+            if (File.Exists(baseDirectoryPath))
+                return baseDirectoryPath;
+
+            return string.Empty;
         }
 
         private IEnumerable<string> GetModels()

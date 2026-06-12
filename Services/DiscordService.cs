@@ -25,6 +25,27 @@ namespace MarketRadar.Services
             }
         }
 
+        public async Task SendFileAsync(string path, string message)
+        {
+            if (string.IsNullOrWhiteSpace(_webhookUrl) || !File.Exists(path))
+                return;
+
+            await using var fileStream = File.OpenRead(path);
+            using var form = new MultipartFormDataContent();
+            using var payload = new StringContent(
+                JsonSerializer.Serialize(new { content = message }),
+                Encoding.UTF8,
+                "application/json");
+            using var fileContent = new StreamContent(fileStream);
+
+            fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("video/mp4");
+            form.Add(payload, "payload_json");
+            form.Add(fileContent, "files[0]", Path.GetFileName(path));
+
+            var response = await _http.PostAsync(_webhookUrl, form);
+            response.EnsureSuccessStatusCode();
+        }
+
         private async Task SendChunkAsync(string msg)
         {
             var body = new
