@@ -81,7 +81,6 @@ class Program
 ━━━━━━━━━━
 🧠 Gemini Market Commentary
 {commentary}
-{GetVoiceScriptSection(voiceScript)}
 {GetNoTimeVoiceScriptSection(noTimeVoiceScript, report)}
 """;
 
