@@ -82,7 +82,7 @@ class Program
 🧠 Gemini Market Commentary
 {commentary}
 {GetVoiceScriptSection(voiceScript)}
-{GetNoTimeVoiceScriptSection(noTimeVoiceScript)}
+{GetNoTimeVoiceScriptSection(noTimeVoiceScript, report)}
 """;
 
         Log.Information(msg);
@@ -105,15 +105,19 @@ class Program
 """;
     }
 
-    private static string GetNoTimeVoiceScriptSection(string noTimeVoiceScript)
+    private static string GetNoTimeVoiceScriptSection(string noTimeVoiceScript, MarketRadar.Models.RiskReport report)
     {
         if (string.IsNullOrWhiteSpace(noTimeVoiceScript))
             return string.Empty;
+
+        var dataDate = report.NasdaqTrend.LatestDate?.ToString("yyyy-MM-dd") ?? "N/A";
 
         return $"""
 
 ━━━━━━━━━━
 🎬 Short Video Script（No Time）
+日期：{dataDate}
+
 {noTimeVoiceScript}
 """;
     }

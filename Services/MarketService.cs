@@ -14,7 +14,8 @@ namespace MarketRadar.Services
 
         public async Task<MarketData> GetRiskAsync()
         {
-            var nasdaqTask = _yahooTrendService.GetTrendWithFallbackAsync("^IXIC", "QQQ");
+            var targetDate = GetPreviousUsBusinessDate(GetTaiwanToday());
+            var nasdaqTask = _yahooTrendService.GetTrendWithFallbackAsync("^IXIC", "QQQ", targetDate);
             var spreadTask = _fredService.GetYieldSpreadDataAsync();
 
             await Task.WhenAll(nasdaqTask, spreadTask);
@@ -65,6 +66,37 @@ namespace MarketRadar.Services
                 HygTrend = hyg,
                 OilTrend = oil
             };
+        }
+
+        private static DateTime GetPreviousUsBusinessDate(DateTime today)
+        {
+            var date = today.Date.AddDays(-1);
+
+            while (date.DayOfWeek == DayOfWeek.Saturday ||
+                   date.DayOfWeek == DayOfWeek.Sunday)
+            {
+                date = date.AddDays(-1);
+            }
+
+            return date;
+        }
+
+        private static DateTime GetTaiwanToday()
+        {
+            var timeZone = GetTaiwanTimeZone();
+            return TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, timeZone).Date;
+        }
+
+        private static TimeZoneInfo GetTaiwanTimeZone()
+        {
+            try
+            {
+                return TimeZoneInfo.FindSystemTimeZoneById("Asia/Taipei");
+            }
+            catch (TimeZoneNotFoundException)
+            {
+                return TimeZoneInfo.FindSystemTimeZoneById("Taipei Standard Time");
+            }
         }
     }
 }
